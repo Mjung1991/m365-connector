@@ -7,13 +7,22 @@ Ablauf:
   3. Browser öffnet Admin-Consent-URL
   4. Kundentenant-Admin authentifiziert sich und erteilt Consent
   5. Wizard erfasst TENANT_ID aus dem Callback
-  6. .env im aktuellen Ordner wird generiert
+  6. Credentials werden via Storage gespeichert (Default: .env in cwd)
   7. Verbindungstest mit Microsoft Graph
 
-Verwendung:
-  m365-setup                    # App interaktiv auswählen
+CLI-Verwendung:
+  m365-setup                    # App interaktiv auswählen, .env in cwd
   m365-setup --app mail-read    # App direkt angeben
   m365-setup --add-app          # Neue App-Credentials hinterlegen
+
+Programmatische Verwendung (z.B. aus einem Web-Backend):
+  from m365_connector.cli.setup_wizard import run_wizard
+  from m365_connector import CallbackStorage
+
+  def write_to_db(tenant_id, client_id, client_secret):
+      db.tenants.update(...).set(...)
+
+  run_wizard(app_name="mail-read", storage=CallbackStorage(write_to_db))
 """
 
 import argparse
@@ -31,9 +40,10 @@ from m365_connector.credentials import (
     _DEV_DIR,
     list_developer_apps,
     load_developer_credentials,
-    save_credentials,
     save_developer_credentials,
 )
+from m365_connector.oauth import build_admin_consent_url, parse_consent_callback
+from m365_connector.storage import CredentialStorage, EnvFileStorage
 
 _CALLBACK_PORT = 8888
 _CALLBACK_PATH = "/callback"
@@ -74,15 +84,6 @@ def _make_callback_handler(result_holder: list, done_event: Event):
 def _run_callback_server(server: HTTPServer, timeout: int = 180) -> None:
     server.timeout = timeout
     server.handle_request()
-
-
-def _build_consent_url(client_id: str) -> str:
-    params = urllib.parse.urlencode({
-        "client_id": client_id,
-        "redirect_uri": _REDIRECT_URI,
-        "scope": "https://graph.microsoft.com/.default",
-    })
-    return f"https://login.microsoftonline.com/organizations/v2.0/adminconsent?{params}"
 
 
 def _select_app(app_arg: str | None) -> str:
@@ -138,10 +139,118 @@ def _add_app_flow() -> None:
     print(f"\n✅ App '{app_name}' gespeichert in {_DEV_DIR / f'{app_name}.env'}")
 
 
+def run_wizard(
+    app_name: str | None = None,
+    storage: CredentialStorage | None = None,
+    test_connection: bool = True,
+) -> dict:
+    """Treibt den Setup-Flow programmatisch.
+
+    Args:
+        app_name: Name der Developer-App aus ~/.m365_connector/. None = interaktive Auswahl.
+        storage: Persistenz für die Credentials. None = EnvFileStorage(".env") in cwd.
+        test_connection: Wenn True, validiert die gespeicherten Credentials gegen Graph.
+
+    Returns:
+        Dict mit tenant_id, client_id, client_secret.
+
+    Raises:
+        SystemExit: bei Abbruch oder Fehler im Consent-Flow.
+    """
+    if storage is None:
+        storage = EnvFileStorage(".env")
+
+    # App auswählen
+    selected_app = _select_app(app_name)
+    dev_creds = load_developer_credentials(selected_app)
+    print(f"   ✅ {selected_app}  (CLIENT_ID: {dev_creds['client_id'][:8]}...)")
+
+    # Consent-URL bauen
+    consent_url = build_admin_consent_url(
+        client_id=dev_creds["client_id"],
+        redirect_uri=_REDIRECT_URI,
+    )
+    print(f"\n2. Admin-Consent")
+    print(f"\n   Öffne den folgenden Link im Browser und melde dich")
+    print(f"   mit einem M365 Global Administrator des Kunden an:\n")
+    print(f"   {consent_url}\n")
+
+    # Callback-Server starten
+    result_holder: list[dict] = []
+    done_event = Event()
+    handler_class = _make_callback_handler(result_holder, done_event)
+    server = HTTPServer(("localhost", _CALLBACK_PORT), handler_class)
+    Thread(target=_run_callback_server, args=(server, 180), daemon=True).start()
+
+    opened = webbrowser.open(consent_url)
+    if not opened:
+        print("   (Browser konnte nicht automatisch geöffnet werden — URL oben manuell aufrufen)")
+
+    print("   Warte auf Bestätigung im Browser... (Timeout: 3 Minuten)")
+    received = done_event.wait(timeout=180)
+    if not received:
+        print("\n❌ Timeout — kein Callback empfangen. Bitte erneut ausführen.")
+        sys.exit(1)
+
+    raw_params = result_holder[0] if result_holder else {}
+    parsed = parse_consent_callback(raw_params)
+    if not parsed["success"]:
+        print(f"\n❌ Consent abgelehnt: {parsed['error']}\n   {parsed['error_description'] or ''}")
+        sys.exit(1)
+
+    tenant_id = parsed["tenant_id"]
+    if not tenant_id:
+        print("\n❌ TENANT_ID konnte nicht aus dem Callback gelesen werden.")
+        print("   Parameter empfangen:", list(raw_params.keys()))
+        sys.exit(1)
+
+    print(f"\n   ✅ Consent erteilt! Tenant-ID: {tenant_id}")
+
+    # Storage speichern
+    print(f"\n3. Credentials speichern ({type(storage).__name__})")
+    storage.save(
+        tenant_id=tenant_id,
+        client_id=dev_creds["client_id"],
+        client_secret=dev_creds["client_secret"],
+    )
+    print(f"   ✅ Gespeichert")
+
+    credentials = {
+        "tenant_id": tenant_id,
+        "client_id": dev_creds["client_id"],
+        "client_secret": dev_creds["client_secret"],
+    }
+
+    if test_connection:
+        print("\n4. Verbindungstest...")
+        asyncio.run(_test_connection_with_credentials(credentials))
+
+    return credentials
+
+
+async def _test_connection_with_credentials(credentials: dict) -> None:
+    from m365_connector import M365Client
+    try:
+        async with M365Client.from_credentials(**credentials) as client:
+            info = await client.verify_connection()
+            print(f"   ✅ Verbindung erfolgreich!")
+            print(f"   Tenant: {info['display_name']} ({info['tenant_id']})")
+            domains = ", ".join(info["domains"][:3])
+            print(f"   Domains: {domains}")
+    except Exception as e:
+        print(f"   ⚠️  Verbindungstest fehlgeschlagen: {e}")
+        print("   Die Credentials wurden gespeichert — prüfe Permissions und Tenant.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="M365 Connector Setup-Wizard")
     parser.add_argument("--app", help="App-Name aus ~/.m365_connector/ (z.B. mail-read)")
     parser.add_argument("--add-app", action="store_true", help="Neue App-Credentials hinterlegen")
+    parser.add_argument(
+        "--env-file",
+        default=".env",
+        help="Pfad zur Ziel-.env-Datei (Default: .env in cwd)",
+    )
     args = parser.parse_args()
 
     print("=" * 60)
@@ -152,81 +261,9 @@ def main() -> None:
         _add_app_flow()
         return
 
-    # App auswählen
     print("\n1. App auswählen")
-    app_name = _select_app(args.app)
-    dev_creds = load_developer_credentials(app_name)
-    print(f"   ✅ {app_name}  (CLIENT_ID: {dev_creds['client_id'][:8]}...)")
-
-    # Consent-URL bauen
-    consent_url = _build_consent_url(dev_creds["client_id"])
-    print(f"\n2. Admin-Consent")
-    print(f"\n   Öffne den folgenden Link im Browser und melde dich")
-    print(f"   mit einem M365 Global Administrator des Kunden an:\n")
-    print(f"   {consent_url}\n")
-
-    # Callback-Server starten (state via Closure, kein Class-State)
-    result_holder: list[dict] = []
-    done_event = Event()
-    handler_class = _make_callback_handler(result_holder, done_event)
-
-    server = HTTPServer(("localhost", _CALLBACK_PORT), handler_class)
-    Thread(target=_run_callback_server, args=(server, 180), daemon=True).start()
-
-    opened = webbrowser.open(consent_url)
-    if not opened:
-        print("   (Browser konnte nicht automatisch geöffnet werden — URL oben manuell aufrufen)")
-
-    print("   Warte auf Bestätigung im Browser... (Timeout: 3 Minuten)")
-    received = done_event.wait(timeout=180)
-
-    if not received:
-        print("\n❌ Timeout — kein Callback empfangen. Bitte erneut ausführen.")
-        sys.exit(1)
-
-    params = result_holder[0] if result_holder else {}
-    if params.get("admin_consent") != "True":
-        error = params.get("error", "Unbekannt")
-        desc = params.get("error_description", "")
-        print(f"\n❌ Consent abgelehnt: {error}\n   {desc}")
-        sys.exit(1)
-
-    tenant_id = params.get("tenant")
-    if not tenant_id:
-        print("\n❌ TENANT_ID konnte nicht aus dem Callback gelesen werden.")
-        print("   Parameter empfangen:", list(params.keys()))
-        sys.exit(1)
-
-    print(f"\n   ✅ Consent erteilt! Tenant-ID: {tenant_id}")
-
-    # .env speichern
-    env_path = Path(".env")
-    print(f"\n3. Credentials speichern → {env_path.absolute()}")
-    save_credentials(
-        tenant_id=tenant_id,
-        client_id=dev_creds["client_id"],
-        client_secret=dev_creds["client_secret"],
-        env_path=env_path,
-    )
-    print("   ✅ .env gespeichert (chmod 600)")
-
-    # Verbindungstest
-    print("\n4. Verbindungstest...")
-    asyncio.run(_test_connection(env_path))
-
-
-async def _test_connection(env_path: Path) -> None:
-    from m365_connector import M365Client
-    try:
-        async with M365Client.from_env(env_path) as client:
-            info = await client.verify_connection()
-            print(f"   ✅ Verbindung erfolgreich!")
-            print(f"   Tenant: {info['display_name']} ({info['tenant_id']})")
-            domains = ", ".join(info["domains"][:3])
-            print(f"   Domains: {domains}")
-    except Exception as e:
-        print(f"   ⚠️  Verbindungstest fehlgeschlagen: {e}")
-        print("   Die .env wurde gespeichert — prüfe Credentials und Permissions.")
+    storage = EnvFileStorage(args.env_file)
+    run_wizard(app_name=args.app, storage=storage)
 
     print("\n" + "=" * 60)
     print("  Setup abgeschlossen! Verwende in deinem Projekt:")

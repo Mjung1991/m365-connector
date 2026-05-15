@@ -80,6 +80,50 @@ Der Wizard:
 
 **Voraussetzung beim Kunden:** Der Admin muss ein **Global Administrator** im M365-Tenant sein.
 
+### Programmatische Verwendung aus einem Web-Backend
+
+Statt der `.env`-Datei kannst du die Credentials in eine DB / Secrets-Manager schreiben:
+
+```python
+from m365_connector import CallbackStorage, build_admin_consent_url, parse_consent_callback
+
+# 1. Im Frontend/Portal: Admin klickt "M365 einrichten"
+#    → Backend baut Consent-URL und redirected den Browser hin
+url = build_admin_consent_url(
+    client_id=os.environ["M365_DEV_CLIENT_ID"],
+    redirect_uri="https://meinportal.de/m365-callback",
+    state=str(kundentenant.id),  # für Wiederzuordnung
+)
+
+# 2. Im Callback-Endpoint des Portals
+@app.get("/m365-callback")
+async def m365_callback(request):
+    parsed = parse_consent_callback(dict(request.query_params))
+    if not parsed["success"]:
+        return {"error": parsed["error"]}
+
+    # in eigene DB schreiben (z.B. verschlüsselt)
+    encrypt_and_save(
+        tenant_db_id=parsed["state"],
+        m365_tenant_id=parsed["tenant_id"],
+        m365_client_id=DEV_CLIENT_ID,
+        m365_client_secret=DEV_CLIENT_SECRET,
+    )
+    return {"ok": True}
+```
+
+Alternativ: programmatisch aus einem Skript heraus den Wizard mit eigenem Storage starten:
+
+```python
+from m365_connector.cli.setup_wizard import run_wizard
+from m365_connector import CallbackStorage
+
+def write_to_db(tenant_id, client_id, client_secret):
+    db.tenants.update(...).set(...)
+
+run_wizard(app_name="mail-read", storage=CallbackStorage(write_to_db))
+```
+
 ### Code-Verwendung
 
 ```python
