@@ -166,10 +166,14 @@ pytest tests/ -v
 | Service | Methode | Beschreibung |
 |---|---|---|
 | `client.mail` | `send(mailbox, to, subject, body)` | E-Mail senden |
-| `client.mail` | `list_inbox(mailbox, limit, unread_only)` | Inbox lesen |
+| `client.mail` | `list_inbox(mailbox, limit, unread_only)` | Inbox lesen (Convenience) |
+| `client.mail` | `list_messages(mailbox, folder, limit, unread_only, page_token)` | Generisches Listen mit Pagination |
 | `client.mail` | `get_message(mailbox, message_id)` | Einzelne Mail mit Body |
 | `client.mail` | `mark_as_read(mailbox, message_id)` | Als gelesen markieren |
 | `client.mail` | `move_to_folder(mailbox, message_id, folder)` | In Ordner verschieben |
+| `client.mail` | `move_batch(mailbox, message_ids, destination_folder)` | Batch-Move via Graph `$batch` (max 20) |
+| `client.mail` | `fetch_attachments(mailbox, message_id)` | Anhänge laden (base64 in `contentBytes`) |
+| `client.mail` | `send_forward(mailbox, message_id, to, comment)` | Mail weiterleiten |
 | `client.calendar` | `list_events(user, start, end)` | Kalendereinträge lesen |
 | `client.calendar` | `create_event(user, subject, start, end)` | Eintrag erstellen |
 | `client.calendar` | `delete_event(user, event_id)` | Eintrag löschen |

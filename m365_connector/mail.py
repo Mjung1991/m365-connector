@@ -110,3 +110,128 @@ class MailService:
         ) as resp:
             if resp.status != 201:
                 raise RuntimeError(f"mail.move_to_folder failed ({resp.status})")
+
+    async def list_messages(
+        self,
+        mailbox: str,
+        folder: str | None = None,
+        limit: int = 50,
+        unread_only: bool = False,
+        page_token: str | None = None,
+    ) -> tuple[list[dict], str | None]:
+        """Lists messages with pagination.
+
+        Args:
+            mailbox: Postfach-Adresse oder User-ID.
+            folder: Folder-ID oder Wellname ('inbox', 'archive', 'sentitems', etc.).
+                    None = alle Nachrichten im Postfach.
+            limit: Seitengröße.
+            unread_only: Filtert auf ungelesene Mails.
+            page_token: @odata.nextLink aus vorherigem Aufruf zum Weiterblättern.
+
+        Returns:
+            Tuple aus (messages, next_page_token). next_page_token=None wenn letzte Seite.
+        """
+        token = await self._auth.get_token()
+        headers = {"Authorization": f"Bearer {token}"}
+
+        if page_token:
+            url = page_token
+            params: dict = {}
+        else:
+            if folder:
+                url = f"{_GRAPH}/users/{mailbox}/mailFolders/{folder}/messages"
+            else:
+                url = f"{_GRAPH}/users/{mailbox}/messages"
+            params = {
+                "$top": limit,
+                "$select": "id,subject,from,receivedDateTime,bodyPreview,isRead,hasAttachments",
+                "$orderby": "receivedDateTime DESC",
+            }
+            if unread_only:
+                params["$filter"] = "isRead eq false"
+
+        async with self._get_session().get(url, headers=headers, params=params) as resp:
+            if resp.status != 200:
+                raise RuntimeError(f"mail.list_messages failed ({resp.status})")
+            data = await resp.json()
+            return data.get("value", []), data.get("@odata.nextLink")
+
+    async def fetch_attachments(self, mailbox: str, message_id: str) -> list[dict]:
+        """Returns all attachments of a message (with content as base64)."""
+        token = await self._auth.get_token()
+        async with self._get_session().get(
+            f"{_GRAPH}/users/{mailbox}/messages/{message_id}/attachments",
+            headers={"Authorization": f"Bearer {token}"},
+        ) as resp:
+            if resp.status != 200:
+                raise RuntimeError(f"mail.fetch_attachments failed ({resp.status})")
+            data = await resp.json()
+            return data.get("value", [])
+
+    async def send_forward(
+        self,
+        mailbox: str,
+        message_id: str,
+        to: str | list[str],
+        comment: str | None = None,
+    ) -> None:
+        """Forwards a message to one or more recipients."""
+        recipients = [to] if isinstance(to, str) else to
+        payload: dict = {
+            "toRecipients": [
+                {"emailAddress": {"address": addr}} for addr in recipients
+            ],
+        }
+        if comment is not None:
+            payload["comment"] = comment
+
+        token = await self._auth.get_token()
+        async with self._get_session().post(
+            f"{_GRAPH}/users/{mailbox}/messages/{message_id}/forward",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json=payload,
+        ) as resp:
+            if resp.status not in (200, 202):
+                raise RuntimeError(f"mail.send_forward failed ({resp.status})")
+
+    async def move_batch(
+        self,
+        mailbox: str,
+        message_ids: list[str],
+        destination_folder: str,
+    ) -> list[dict]:
+        """Moves multiple messages in a single Graph $batch request.
+
+        Returns:
+            Liste der Batch-Responses (eine pro message_id, in gleicher Reihenfolge).
+            Jeder Eintrag enthält id, status und ggf. body.
+        """
+        if not message_ids:
+            return []
+        if len(message_ids) > 20:
+            raise ValueError("Graph $batch supports max 20 requests per call")
+
+        requests = [
+            {
+                "id": str(idx),
+                "method": "POST",
+                "url": f"/users/{mailbox}/messages/{mid}/move",
+                "headers": {"Content-Type": "application/json"},
+                "body": {"destinationId": destination_folder},
+            }
+            for idx, mid in enumerate(message_ids)
+        ]
+
+        token = await self._auth.get_token()
+        async with self._get_session().post(
+            f"{_GRAPH}/$batch",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json={"requests": requests},
+        ) as resp:
+            if resp.status != 200:
+                raise RuntimeError(f"mail.move_batch failed ({resp.status})")
+            data = await resp.json()
+            responses = data.get("responses", [])
+            responses.sort(key=lambda r: int(r["id"]))
+            return responses
