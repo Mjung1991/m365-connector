@@ -36,17 +36,30 @@ class MailDeltaService:
         self,
         mailbox: str,
         folder: str = "inbox",
+        latest: bool = False,
     ) -> tuple[list[dict], str, bool]:
         """Starts a new delta sync for a folder.
 
+        Args:
+            mailbox: Postfach-Adresse oder User-ID.
+            folder: Mail-Folder-Welle oder -ID (Default: "inbox").
+            latest: Wenn True, fügt `?$deltaToken=latest` an — liefert sofort
+                    einen leeren Sync mit final-deltaLink, ohne durch alle
+                    existierenden Mails zu paginieren. Ideal für Onboarding
+                    von großen Postfächern: Startpunkt setzen, danach nur
+                    neue Mails via `next(link)` empfangen.
+
         Returns:
             (messages, link, is_complete):
-                - messages: list of changed message objects on this page
+                - messages: list of changed message objects on this page (leer bei latest=True)
                 - link: URL for next call (next page) or final delta link (for next sync run)
                 - is_complete: True if `link` is the final deltaLink (sync done),
                                False if `link` is a nextLink (more pages to fetch).
+                               Bei latest=True ist is_complete immer True.
         """
         url = f"{_GRAPH}/users/{mailbox}/mailFolders/{folder}/messages/delta"
+        if latest:
+            url += "?$deltaToken=latest"
         return await self._fetch(url)
 
     async def next(self, link: str) -> tuple[list[dict], str, bool]:

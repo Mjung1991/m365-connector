@@ -80,6 +80,30 @@ async def test_initial_respects_custom_folder(service, mock_session):
     assert "/mailFolders/archive/messages/delta" in url
 
 
+async def test_initial_with_latest_skips_pagination(service, mock_session):
+    """latest=True fügt $deltaToken=latest an — Graph liefert sofort finalen Link."""
+    mock_session.get = MagicMock(return_value=_resp(200, {
+        "value": [],
+        "@odata.deltaLink": "https://graph.microsoft.com/...?$deltatoken=fresh",
+    }))
+    messages, link, done = await service.initial(
+        mailbox="bot@firma.de", folder="inbox", latest=True
+    )
+    assert messages == []
+    assert done is True
+    url = mock_session.get.call_args.args[0]
+    assert url.endswith("/mailFolders/inbox/messages/delta?$deltaToken=latest")
+
+
+async def test_initial_without_latest_no_query_string(service, mock_session):
+    mock_session.get = MagicMock(return_value=_resp(200, {
+        "value": [], "@odata.deltaLink": "https://x",
+    }))
+    await service.initial(mailbox="bot@firma.de", folder="inbox")
+    url = mock_session.get.call_args.args[0]
+    assert "?" not in url
+
+
 async def test_initial_raises_on_error(service, mock_session):
     mock_session.get = MagicMock(return_value=_resp(403, text="Forbidden"))
     with pytest.raises(RuntimeError, match="mail.delta failed"):

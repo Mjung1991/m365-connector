@@ -221,7 +221,7 @@ pytest tests/ -v
 | `client.mail.folders` | `list(mailbox, parent_id)` | Mail-Folder auflisten |
 | `client.mail.folders` | `create(mailbox, name, parent_id)` | Folder anlegen |
 | `client.mail.folders` | `ensure(mailbox, name, parent_id)` | Idempotent: gibt existierende ID oder erstellt neu |
-| `client.mail.delta` | `initial(mailbox, folder)` | Delta-Sync starten — liefert (messages, link, is_complete) |
+| `client.mail.delta` | `initial(mailbox, folder, latest)` | Delta-Sync starten — `latest=True` für instant empty sync (große Postfächer) |
 | `client.mail.delta` | `next(link)` | Nächste Seite oder Resume aus persistiertem deltaLink |
 | `client.subscriptions` | `create(resource, notification_url, expires, client_state)` | Webhook-Subscription anlegen |
 | `client.subscriptions` | `renew(sub_id, expires)` | Subscription verlängern |
