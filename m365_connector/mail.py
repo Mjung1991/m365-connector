@@ -7,6 +7,7 @@ from typing import Callable
 import aiohttp
 
 from .auth import M365Auth
+from .delta import MailDeltaService
 from .folders import MailFolderService
 
 _GRAPH = "https://graph.microsoft.com/v1.0"
@@ -17,6 +18,7 @@ class MailService:
         self._auth = auth
         self._get_session = get_session
         self.folders = MailFolderService(auth, get_session)
+        self.delta = MailDeltaService(auth, get_session)
 
     async def send(
         self,

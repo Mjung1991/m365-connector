@@ -11,6 +11,7 @@ from .auth import M365Auth
 from .calendar import CalendarService
 from .credentials import load_credentials
 from .mail import MailService
+from .subscriptions import SubscriptionService
 
 
 class M365Client:
@@ -28,6 +29,7 @@ class M365Client:
         self._session: aiohttp.ClientSession | None = None
         self.mail = MailService(auth, self._get_session)
         self.calendar = CalendarService(auth, self._get_session)
+        self.subscriptions = SubscriptionService(auth, self._get_session)
 
     def _get_session(self) -> aiohttp.ClientSession:
         """Gibt die gemeinsame HTTP-Session zurück — wird bei Bedarf erstellt."""

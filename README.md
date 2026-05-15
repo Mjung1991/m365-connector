@@ -177,6 +177,13 @@ pytest tests/ -v
 | `client.mail.folders` | `list(mailbox, parent_id)` | Mail-Folder auflisten |
 | `client.mail.folders` | `create(mailbox, name, parent_id)` | Folder anlegen |
 | `client.mail.folders` | `ensure(mailbox, name, parent_id)` | Idempotent: gibt existierende ID oder erstellt neu |
+| `client.mail.delta` | `initial(mailbox, folder)` | Delta-Sync starten — liefert (messages, link, is_complete) |
+| `client.mail.delta` | `next(link)` | Nächste Seite oder Resume aus persistiertem deltaLink |
+| `client.subscriptions` | `create(resource, notification_url, expires, client_state)` | Webhook-Subscription anlegen |
+| `client.subscriptions` | `renew(sub_id, expires)` | Subscription verlängern |
+| `client.subscriptions` | `delete(sub_id)` | Subscription beenden |
+| `client.subscriptions` | `list()` · `get(sub_id)` | Subscriptions abfragen |
+| Modul-Level | `validate_subscription_token(query_params)` | Webhook-Handshake-Helper (gibt Token zurück oder None) |
 | `client.calendar` | `list_events(user, start, end)` | Kalendereinträge lesen |
 | `client.calendar` | `create_event(user, subject, start, end)` | Eintrag erstellen |
 | `client.calendar` | `delete_event(user, event_id)` | Eintrag löschen |
