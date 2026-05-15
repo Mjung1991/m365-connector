@@ -174,6 +174,9 @@ pytest tests/ -v
 | `client.mail` | `move_batch(mailbox, message_ids, destination_folder)` | Batch-Move via Graph `$batch` (max 20) |
 | `client.mail` | `fetch_attachments(mailbox, message_id)` | Anhänge laden (base64 in `contentBytes`) |
 | `client.mail` | `send_forward(mailbox, message_id, to, comment)` | Mail weiterleiten |
+| `client.mail.folders` | `list(mailbox, parent_id)` | Mail-Folder auflisten |
+| `client.mail.folders` | `create(mailbox, name, parent_id)` | Folder anlegen |
+| `client.mail.folders` | `ensure(mailbox, name, parent_id)` | Idempotent: gibt existierende ID oder erstellt neu |
 | `client.calendar` | `list_events(user, start, end)` | Kalendereinträge lesen |
 | `client.calendar` | `create_event(user, subject, start, end)` | Eintrag erstellen |
 | `client.calendar` | `delete_event(user, event_id)` | Eintrag löschen |
