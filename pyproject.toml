@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "m365_connector"
+version = "0.1.0"
+description = "Wiederverwendbares Microsoft 365 Authentifizierungs-Modul"
+requires-python = ">=3.12"
+dependencies = [
+    "azure-identity>=1.15.0",
+    "aiohttp>=3.9.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-mock>=3.12.0",
+]
+
+[project.scripts]
+m365-setup = "m365_connector.cli.setup_wizard:main"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["m365_connector*", "cli*"]
