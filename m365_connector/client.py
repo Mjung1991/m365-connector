@@ -32,9 +32,11 @@ class M365Client:
         self.subscriptions = SubscriptionService(auth, self._get_session)
 
     def _get_session(self) -> aiohttp.ClientSession:
-        """Gibt die gemeinsame HTTP-Session zurück — wird bei Bedarf erstellt."""
+        """Gibt die gemeinsame HTTP-Session zurück — wird bei Bedarf erstellt.
+        Total-Timeout 60s verhindert haengende Calls bei grossen Attachments."""
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession()
+            from ._http import make_session
+            self._session = make_session()
         return self._session
 
     @classmethod
@@ -73,7 +75,8 @@ class M365Client:
             params={"$select": "id,displayName,verifiedDomains"},
         ) as resp:
             if resp.status != 200:
-                raise RuntimeError(f"Connection test failed ({resp.status})")
+                from ._http import to_typed as _to_typed
+                raise _to_typed(resp.status, "client.verify_connection")
             data = await resp.json()
             org = data["value"][0] if data.get("value") else {}
             return {

@@ -9,6 +9,7 @@ import aiohttp
 from .auth import M365Auth
 from .delta import MailDeltaService
 from .folders import MailFolderService
+from ._http import to_typed as _to_typed
 
 _GRAPH = "https://graph.microsoft.com/v1.0"
 
@@ -53,7 +54,7 @@ class MailService:
             json=payload,
         ) as resp:
             if resp.status not in (200, 202):
-                raise RuntimeError(f"mail.send failed ({resp.status})")
+                raise _to_typed(resp.status, "mail.send")
 
     async def list_inbox(
         self,
@@ -77,7 +78,7 @@ class MailService:
             params=params,
         ) as resp:
             if resp.status != 200:
-                raise RuntimeError(f"mail.list_inbox failed ({resp.status})")
+                raise _to_typed(resp.status, "mail.list_inbox")
             data = await resp.json()
             return data.get("value", [])
 
@@ -90,7 +91,7 @@ class MailService:
             params={"$select": "id,subject,from,receivedDateTime,body,isRead"},
         ) as resp:
             if resp.status != 200:
-                raise RuntimeError(f"mail.get_message failed ({resp.status})")
+                raise _to_typed(resp.status, "mail.get_message")
             return await resp.json()
 
     async def mark_as_read(self, mailbox: str, message_id: str) -> None:
@@ -102,7 +103,7 @@ class MailService:
             json={"isRead": True},
         ) as resp:
             if resp.status != 200:
-                raise RuntimeError(f"mail.mark_as_read failed ({resp.status})")
+                raise _to_typed(resp.status, "mail.mark_as_read")
 
     async def move_to_folder(self, mailbox: str, message_id: str, folder: str) -> None:
         """Moves a message to a folder (e.g. 'deleteditems', 'archive')."""
@@ -113,7 +114,7 @@ class MailService:
             json={"destinationId": folder},
         ) as resp:
             if resp.status != 201:
-                raise RuntimeError(f"mail.move_to_folder failed ({resp.status})")
+                raise _to_typed(resp.status, "mail.move_to_folder")
 
     async def list_messages(
         self,
@@ -157,7 +158,7 @@ class MailService:
 
         async with self._get_session().get(url, headers=headers, params=params) as resp:
             if resp.status != 200:
-                raise RuntimeError(f"mail.list_messages failed ({resp.status})")
+                raise _to_typed(resp.status, "mail.list_messages")
             data = await resp.json()
             return data.get("value", []), data.get("@odata.nextLink")
 
@@ -169,7 +170,7 @@ class MailService:
             headers={"Authorization": f"Bearer {token}"},
         ) as resp:
             if resp.status != 200:
-                raise RuntimeError(f"mail.fetch_attachments failed ({resp.status})")
+                raise _to_typed(resp.status, "mail.fetch_attachments")
             data = await resp.json()
             return data.get("value", [])
 
@@ -197,7 +198,7 @@ class MailService:
             json=payload,
         ) as resp:
             if resp.status not in (200, 202):
-                raise RuntimeError(f"mail.send_forward failed ({resp.status})")
+                raise _to_typed(resp.status, "mail.send_forward")
 
     async def move_batch(
         self,
@@ -234,7 +235,7 @@ class MailService:
             json={"requests": requests},
         ) as resp:
             if resp.status != 200:
-                raise RuntimeError(f"mail.move_batch failed ({resp.status})")
+                raise _to_typed(resp.status, "mail.move_batch")
             data = await resp.json()
             responses = data.get("responses", [])
             responses.sort(key=lambda r: int(r["id"]))

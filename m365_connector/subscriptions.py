@@ -12,6 +12,7 @@ from typing import Callable, Mapping
 import aiohttp
 
 from .auth import M365Auth
+from ._http import to_typed as _to_typed
 
 _GRAPH = "https://graph.microsoft.com/v1.0"
 
@@ -66,7 +67,7 @@ class SubscriptionService:
             json=payload,
         ) as resp:
             if resp.status != 201:
-                raise RuntimeError(f"subscriptions.create failed ({resp.status})")
+                raise _to_typed(resp.status, "subscriptions.create")
             return await resp.json()
 
     async def renew(self, subscription_id: str, expires: str) -> dict:
@@ -81,7 +82,7 @@ class SubscriptionService:
             json={"expirationDateTime": expires},
         ) as resp:
             if resp.status != 200:
-                raise RuntimeError(f"subscriptions.renew failed ({resp.status})")
+                raise _to_typed(resp.status, "subscriptions.renew")
             return await resp.json()
 
     async def delete(self, subscription_id: str) -> None:
@@ -92,7 +93,7 @@ class SubscriptionService:
             headers={"Authorization": f"Bearer {token}"},
         ) as resp:
             if resp.status not in (200, 204):
-                raise RuntimeError(f"subscriptions.delete failed ({resp.status})")
+                raise _to_typed(resp.status, "subscriptions.delete")
 
     async def list(self) -> list[dict]:
         """Lists all subscriptions for the current application."""
@@ -102,7 +103,7 @@ class SubscriptionService:
             headers={"Authorization": f"Bearer {token}"},
         ) as resp:
             if resp.status != 200:
-                raise RuntimeError(f"subscriptions.list failed ({resp.status})")
+                raise _to_typed(resp.status, "subscriptions.list")
             data = await resp.json()
             return data.get("value", [])
 
@@ -114,7 +115,7 @@ class SubscriptionService:
             headers={"Authorization": f"Bearer {token}"},
         ) as resp:
             if resp.status != 200:
-                raise RuntimeError(f"subscriptions.get failed ({resp.status})")
+                raise _to_typed(resp.status, "subscriptions.get")
             return await resp.json()
 
 

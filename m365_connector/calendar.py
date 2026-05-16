@@ -8,6 +8,7 @@ from typing import Callable
 import aiohttp
 
 from .auth import M365Auth
+from ._http import to_typed as _to_typed
 
 _GRAPH = "https://graph.microsoft.com/v1.0"
 
@@ -50,7 +51,7 @@ class CalendarService:
             },
         ) as resp:
             if resp.status != 200:
-                raise RuntimeError(f"calendar.list_events failed ({resp.status})")
+                raise _to_typed(resp.status, "calendar.list_events")
             data = await resp.json()
             return data.get("value", [])
 
@@ -87,7 +88,7 @@ class CalendarService:
             json=payload,
         ) as resp:
             if resp.status != 201:
-                raise RuntimeError(f"calendar.create_event failed ({resp.status})")
+                raise _to_typed(resp.status, "calendar.create_event")
             return await resp.json()
 
     async def delete_event(self, user: str, event_id: str) -> None:
@@ -98,4 +99,4 @@ class CalendarService:
             headers={"Authorization": f"Bearer {token}"},
         ) as resp:
             if resp.status != 204:
-                raise RuntimeError(f"calendar.delete_event failed ({resp.status})")
+                raise _to_typed(resp.status, "calendar.delete_event")

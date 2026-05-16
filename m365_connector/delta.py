@@ -18,6 +18,7 @@ from typing import Callable
 import aiohttp
 
 from .auth import M365Auth
+from ._http import to_typed as _to_typed
 
 _GRAPH = "https://graph.microsoft.com/v1.0"
 
@@ -82,7 +83,7 @@ class MailDeltaService:
             headers={"Authorization": f"Bearer {token}"},
         ) as resp:
             if resp.status != 200:
-                raise RuntimeError(f"mail.delta failed ({resp.status})")
+                raise _to_typed(resp.status, "mail.delta")
             data = await resp.json()
             messages = data.get("value", [])
             if "@odata.nextLink" in data:

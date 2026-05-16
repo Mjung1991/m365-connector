@@ -7,6 +7,7 @@ from typing import Callable
 import aiohttp
 
 from .auth import M365Auth
+from ._http import to_typed as _to_typed
 
 _GRAPH = "https://graph.microsoft.com/v1.0"
 
@@ -44,7 +45,7 @@ class MailFolderService:
             params={"$top": 100},
         ) as resp:
             if resp.status != 200:
-                raise RuntimeError(f"folders.list failed ({resp.status})")
+                raise _to_typed(resp.status, "folders.list")
             data = await resp.json()
             return data.get("value", [])
 
@@ -71,7 +72,7 @@ class MailFolderService:
             json={"displayName": name},
         ) as resp:
             if resp.status != 201:
-                raise RuntimeError(f"folders.create failed ({resp.status})")
+                raise _to_typed(resp.status, "folders.create")
             return await resp.json()
 
     async def ensure(self, mailbox: str, name: str, parent_id: str | None = None) -> str:
