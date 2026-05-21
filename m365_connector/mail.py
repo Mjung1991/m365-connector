@@ -88,7 +88,7 @@ class MailService:
         async with self._get_session().get(
             f"{_GRAPH}/users/{mailbox}/messages/{message_id}",
             headers={"Authorization": f"Bearer {token}"},
-            params={"$select": "id,subject,from,receivedDateTime,body,isRead"},
+            params={"$select": "id,subject,from,receivedDateTime,body,isRead,hasAttachments"},
         ) as resp:
             if resp.status != 200:
                 raise _to_typed(resp.status, "mail.get_message")
