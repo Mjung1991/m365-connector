@@ -34,7 +34,11 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from threading import Event, Thread
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+# Repo-Wurzel (enthält die Pakete m365_connector + cli) in den Suchpfad, falls der
+# Wizard als Script aus einem nicht-installierten Checkout läuft. Bewusst NICHT der
+# darüberliegende module/-Ordner — der würde das installierte preflight-Paket durch
+# das gleichnamige Projektverzeichnis module/preflight verdecken.
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from m365_connector.credentials import (
     _DEV_DIR,
@@ -84,6 +88,21 @@ def _make_callback_handler(result_holder: list, done_event: Event):
 def _run_callback_server(server: HTTPServer, timeout: int = 180) -> None:
     server.timeout = timeout
     server.handle_request()
+
+
+def _ensure_callback_port_free() -> None:
+    """Preflight: bricht mit klarer Meldung ab, wenn der Callback-Port belegt ist.
+
+    Verhindert den kryptischen OSError beim HTTPServer-Bind, falls Port 8888 schon
+    von einem anderen Prozess (oder einem hängenden früheren Lauf) belegt ist.
+    """
+    from preflight import Status, check_port_free
+
+    result = check_port_free(_CALLBACK_PORT, "OAuth-Callback-Server")
+    if result.status is Status.FAIL:
+        print(f"\n❌ {result.detail}")
+        print(f"   Der Setup-Wizard braucht Port {_CALLBACK_PORT} für den Microsoft-Login.")
+        sys.exit(1)
 
 
 def _select_app(app_arg: str | None) -> str:
@@ -175,7 +194,9 @@ def run_wizard(
     print(f"   mit einem M365 Global Administrator des Kunden an:\n")
     print(f"   {consent_url}\n")
 
-    # Callback-Server starten
+    # Callback-Server starten — vorher prüfen, ob der Port wirklich frei ist
+    # (klare Meldung statt rohem OSError beim Bind).
+    _ensure_callback_port_free()
     result_holder: list[dict] = []
     done_event = Event()
     handler_class = _make_callback_handler(result_holder, done_event)
