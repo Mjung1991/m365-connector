@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "m365_connector"
-version = "0.7.2"
+version = "0.7.3"
 description = "Wiederverwendbares Microsoft 365 Authentifizierungs-Modul"
 requires-python = ">=3.12"
 dependencies = [

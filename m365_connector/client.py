@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable
 
 import aiohttp
 
@@ -55,13 +54,48 @@ class M365Client:
         cls,
         tenant_id: str,
         client_id: str,
-        client_secret: str,
+        client_secret: str | None = None,
+        *,
+        certificate_path: str | None = None,
+        certificate_data: bytes | None = None,
+        certificate_password: str | bytes | None = None,
+        send_certificate_chain: bool = False,
     ) -> "M365Client":
-        """Erstellt einen Client direkt mit Credentials (z.B. aus Secrets Manager)."""
+        """Erstellt einen Client direkt mit Credentials (z.B. aus einem Secrets-Tresor).
+
+        Entweder ``client_secret`` ODER ein Zertifikat (``certificate_path``/``certificate_data``)
+        angeben — genau eine Quelle (siehe ``M365Auth``, fail-closed).
+        """
         auth = M365Auth(
             tenant_id=tenant_id,
             client_id=client_id,
             client_secret=client_secret,
+            certificate_path=certificate_path,
+            certificate_data=certificate_data,
+            certificate_password=certificate_password,
+            send_certificate_chain=send_certificate_chain,
+        )
+        return cls(auth)
+
+    @classmethod
+    def from_certificate(
+        cls,
+        tenant_id: str,
+        client_id: str,
+        *,
+        certificate_path: str | None = None,
+        certificate_data: bytes | None = None,
+        password: str | bytes | None = None,
+        send_certificate_chain: bool = False,
+    ) -> "M365Client":
+        """Erstellt einen Client mit App-only-Zertifikats-Authentifizierung (MS-empfohlen)."""
+        auth = M365Auth.from_certificate(
+            tenant_id,
+            client_id,
+            certificate_path=certificate_path,
+            certificate_data=certificate_data,
+            password=password,
+            send_certificate_chain=send_certificate_chain,
         )
         return cls(auth)
 
