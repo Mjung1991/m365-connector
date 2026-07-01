@@ -7,6 +7,7 @@ import aiohttp
 
 from m365_connector.auth import M365Auth
 from m365_connector.folders import MailFolderService
+from m365_connector.exceptions import M365ServiceError
 
 
 @pytest.fixture
@@ -61,7 +62,7 @@ async def test_list_child_folders(service, mock_session):
 
 async def test_list_raises_on_error(service, mock_session):
     mock_session.get = MagicMock(return_value=_resp(403, text="Forbidden"))
-    with pytest.raises(RuntimeError, match="folders.list failed"):
+    with pytest.raises(M365ServiceError, match=r"folders\.list"):
         await service.list(mailbox="bot@firma.de")
 
 
@@ -87,7 +88,7 @@ async def test_create_child_folder(service, mock_session):
 
 async def test_create_raises_on_error(service, mock_session):
     mock_session.post = MagicMock(return_value=_resp(409, text="Conflict"))
-    with pytest.raises(RuntimeError, match="folders.create failed"):
+    with pytest.raises(M365ServiceError, match=r"folders\.create"):
         await service.create(mailbox="bot@firma.de", name="Dupe")
 
 

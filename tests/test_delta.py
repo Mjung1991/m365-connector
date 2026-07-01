@@ -7,6 +7,7 @@ import aiohttp
 
 from m365_connector.auth import M365Auth
 from m365_connector.delta import MailDeltaService
+from m365_connector.exceptions import M365ServiceError
 
 
 @pytest.fixture
@@ -106,7 +107,7 @@ async def test_initial_without_latest_no_query_string(service, mock_session):
 
 async def test_initial_raises_on_error(service, mock_session):
     mock_session.get = MagicMock(return_value=_resp(403, text="Forbidden"))
-    with pytest.raises(RuntimeError, match="mail.delta failed"):
+    with pytest.raises(M365ServiceError, match=r"mail\.delta"):
         await service.initial(mailbox="bot@firma.de")
 
 

@@ -65,7 +65,9 @@ class MailService:
         """Lists messages in the inbox of the given mailbox."""
         params: dict = {
             "$top": limit,
-            "$select": "id,subject,from,receivedDateTime,bodyPreview,isRead",
+            # conversationId: fuer thread-genaue Anti-Antwort-Schleife (Q antwortet nicht
+            # mehrfach im selben Gespraechsfaden). Stabile Basis-Eigenschaft der message-Ressource.
+            "$select": "id,subject,from,receivedDateTime,bodyPreview,isRead,conversationId",
             "$orderby": "receivedDateTime DESC",
         }
         if unread_only:
@@ -88,7 +90,7 @@ class MailService:
         async with self._get_session().get(
             f"{_GRAPH}/users/{mailbox}/messages/{message_id}",
             headers={"Authorization": f"Bearer {token}"},
-            params={"$select": "id,subject,from,receivedDateTime,body,isRead,hasAttachments"},
+            params={"$select": "id,subject,from,receivedDateTime,body,isRead,hasAttachments,conversationId"},
         ) as resp:
             if resp.status != 200:
                 raise _to_typed(resp.status, "mail.get_message")
@@ -150,7 +152,7 @@ class MailService:
                 url = f"{_GRAPH}/users/{mailbox}/messages"
             params = {
                 "$top": limit,
-                "$select": "id,subject,from,receivedDateTime,bodyPreview,isRead,hasAttachments",
+                "$select": "id,subject,from,receivedDateTime,bodyPreview,isRead,hasAttachments,conversationId",
                 "$orderby": "receivedDateTime DESC",
             }
             if unread_only:

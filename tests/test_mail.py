@@ -1,11 +1,12 @@
 """Tests für MailService — Graph-API-Aufrufe."""
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import aiohttp
 
 from m365_connector.auth import M365Auth
+from m365_connector.exceptions import M365ServiceError
 from m365_connector.mail import MailService
 
 
@@ -44,7 +45,7 @@ async def test_send_mail_success(service, mock_session):
 
 async def test_send_mail_raises_on_error(service, mock_session):
     mock_session.post = MagicMock(return_value=_make_mock_response(403, text='{"error":"Forbidden"}'))
-    with pytest.raises(RuntimeError, match="mail.send failed"):
+    with pytest.raises(M365ServiceError, match=r"mail\.send \(403\)"):
         await service.send(mailbox="bot@firma.de", to="user@firma.de", subject="Test", body="body")
 
 
@@ -62,8 +63,28 @@ async def test_list_inbox_returns_messages(service, mock_session):
 
 async def test_list_inbox_raises_on_error(service, mock_session):
     mock_session.get = MagicMock(return_value=_make_mock_response(401, text="Unauthorized"))
-    with pytest.raises(RuntimeError, match="mail.list_inbox failed"):
+    with pytest.raises(M365ServiceError, match=r"mail\.list_inbox \(401\)"):
         await service.list_inbox(mailbox="bot@firma.de")
+
+
+async def test_list_inbox_selects_conversation_id(service, mock_session):
+    """conversationId muss im $select stehen — Basis fuer thread-genaue Anti-Antwort-Schleife."""
+    mock_session.get = MagicMock(return_value=_make_mock_response(200, {"value": []}))
+    await service.list_inbox(mailbox="bot@firma.de")
+    select = mock_session.get.call_args.kwargs["params"]["$select"]
+    assert "conversationId" in select.split(",")
+
+
+async def test_get_message_selects_conversation_id_and_returns_body(service, mock_session):
+    """get_message liefert conversationId (thread-genau) und den vollen Body."""
+    mock_session.get = MagicMock(return_value=_make_mock_response(200, {
+        "id": "msg-1", "subject": "Re: Angebot", "conversationId": "conv-42",
+        "body": {"contentType": "html", "content": "<p>Text</p>"},
+    }))
+    msg = await service.get_message(mailbox="bot@firma.de", message_id="msg-1")
+    select = mock_session.get.call_args.kwargs["params"]["$select"]
+    assert "conversationId" in select.split(",")
+    assert msg["conversationId"] == "conv-42"
 
 
 async def test_session_reused(auth, mock_session):
@@ -130,9 +151,17 @@ async def test_list_messages_unread_filter(service, mock_session):
     assert params["$filter"] == "isRead eq false"
 
 
+async def test_list_messages_selects_conversation_id(service, mock_session):
+    """Erste Seite muss conversationId selektieren (thread-genau)."""
+    mock_session.get = MagicMock(return_value=_make_mock_response(200, {"value": []}))
+    await service.list_messages(mailbox="bot@firma.de", folder="inbox")
+    select = mock_session.get.call_args.kwargs["params"]["$select"]
+    assert "conversationId" in select.split(",")
+
+
 async def test_list_messages_raises_on_error(service, mock_session):
     mock_session.get = MagicMock(return_value=_make_mock_response(500, text="Server Error"))
-    with pytest.raises(RuntimeError, match="mail.list_messages failed"):
+    with pytest.raises(M365ServiceError, match=r"mail\.list_messages \(500\)"):
         await service.list_messages(mailbox="bot@firma.de")
 
 
@@ -159,7 +188,7 @@ async def test_fetch_attachments_empty(service, mock_session):
 
 async def test_fetch_attachments_raises_on_error(service, mock_session):
     mock_session.get = MagicMock(return_value=_make_mock_response(404, text="Not Found"))
-    with pytest.raises(RuntimeError, match="mail.fetch_attachments failed"):
+    with pytest.raises(M365ServiceError, match=r"mail\.fetch_attachments \(404\)"):
         await service.fetch_attachments(mailbox="bot@firma.de", message_id="missing")
 
 
@@ -195,7 +224,7 @@ async def test_send_forward_multiple_recipients(service, mock_session):
 
 async def test_send_forward_raises_on_error(service, mock_session):
     mock_session.post = MagicMock(return_value=_make_mock_response(403, text="Forbidden"))
-    with pytest.raises(RuntimeError, match="mail.send_forward failed"):
+    with pytest.raises(M365ServiceError, match=r"mail\.send_forward \(403\)"):
         await service.send_forward(mailbox="bot@firma.de", message_id="msg-1", to="x@y.de")
 
 

@@ -7,6 +7,7 @@ import aiohttp
 
 from m365_connector.auth import M365Auth
 from m365_connector.subscriptions import SubscriptionService, validate_subscription_token
+from m365_connector.exceptions import M365ServiceError
 
 
 @pytest.fixture
@@ -103,7 +104,7 @@ async def test_create_with_lifecycle_url(service, mock_session):
 
 async def test_create_raises_on_error(service, mock_session):
     mock_session.post = MagicMock(return_value=_resp(400, text="ValidationError"))
-    with pytest.raises(RuntimeError, match="subscriptions.create failed"):
+    with pytest.raises(M365ServiceError, match=r"subscriptions\.create"):
         await service.create(
             resource="r", notification_url="u", expires="e", client_state="s"
         )
@@ -125,7 +126,7 @@ async def test_renew_updates_expiration(service, mock_session):
 
 async def test_renew_raises_on_error(service, mock_session):
     mock_session.patch = MagicMock(return_value=_resp(404))
-    with pytest.raises(RuntimeError, match="subscriptions.renew failed"):
+    with pytest.raises(M365ServiceError, match=r"subscriptions\.renew"):
         await service.renew("missing", "2026-05-20T00:00:00Z")
 
 
@@ -145,7 +146,7 @@ async def test_delete_accepts_200(service, mock_session):
 
 async def test_delete_raises_on_error(service, mock_session):
     mock_session.delete = MagicMock(return_value=_resp(403))
-    with pytest.raises(RuntimeError, match="subscriptions.delete failed"):
+    with pytest.raises(M365ServiceError, match=r"subscriptions\.delete"):
         await service.delete("sub-1")
 
 
@@ -168,5 +169,5 @@ async def test_get_subscription(service, mock_session):
 
 async def test_get_raises_on_404(service, mock_session):
     mock_session.get = MagicMock(return_value=_resp(404))
-    with pytest.raises(RuntimeError, match="subscriptions.get failed"):
+    with pytest.raises(M365ServiceError, match=r"subscriptions\.get"):
         await service.get("missing")
