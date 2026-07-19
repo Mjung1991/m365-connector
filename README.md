@@ -29,8 +29,20 @@ Im [Azure Portal](https://portal.azure.com) → **App Registrations** → **New 
 | `Calendars.ReadWrite` | Kalender |
 | `Files.Read.All` | OneDrive lesen |
 | `User.Read.All` | Benutzer auflisten |
+| `Sites.Selected` | **Dateien schreiben** — nur in ausdrücklich freigegebenen SharePoint-Sites (empfohlen, ab v0.8.0) |
+| `Files.ReadWrite.All` | Dateien im **ganzen** Tenant schreiben — Notnagel, `Sites.Selected` vorziehen |
 
 → **Grant admin consent for [dein Tenant]** klicken (einmalig für deinen eigenen Tenant)
+
+> ⚠️ **`Sites.Selected` braucht DREI Schritte, nicht einen.** Die Zustimmung in Entra ID allein
+> gibt **keinen** Zugriff — sie erlaubt nur, dass anschließend einzelne Sites freigeschaltet werden:
+> 1. `Sites.Selected` zustimmen (oben),
+> 2. **je Site** `POST /sites/{siteId}/permissions` mit `{"roles": ["write"], "grantedToIdentities":
+>    [{"application": {"id": "<client-id>"}}]}`,
+> 3. Token holen.
+>
+> Fehlt Schritt 2, steht in Azure alles grün und der Zugriff scheitert trotzdem — das ist der
+> häufigste Stolperstein. *(Beleg: Microsoft-Graph-Doku, `concepts/permissions-selected-overview.md`.)*
 
 ### 3. Client Secret generieren
 
@@ -228,6 +240,13 @@ pytest tests/ -v
 | `client.subscriptions` | `delete(sub_id)` | Subscription beenden |
 | `client.subscriptions` | `list()` · `get(sub_id)` | Subscriptions abfragen |
 | Modul-Level | `validate_subscription_token(query_params)` | Webhook-Handshake-Helper (gibt Token zurück oder None) |
+| `client.files` | `site_id(hostname, site_pfad)` | SharePoint-Site über ihren Web-Pfad auflösen → Site-ID |
+| `client.files` | `drive_id(site_id)` · `user_drive_id(benutzer)` | Dokumentbibliothek bzw. OneDrive → Drive-ID |
+| `client.files` | `ensure_folder(drive_id, ordner_pfad)` | Ordner-Pfad anlegen, Ebene für Ebene, idempotent (409 = existiert schon) |
+| `client.files` | `upload(drive_id, ziel_pfad, inhalt, …)` | Datei ablegen — wählt selbst PUT (< 4 MB) oder Upload-Sitzung |
+| `client.files` | `get_item(drive_id, pfad)` · `list_children(drive_id, ordner)` | Metadaten bzw. Ordnerinhalt |
+| `client.files` | `delete_item(drive_id, pfad)` | Löschen (landet im Papierkorb) — u.a. zum Aufräumen nach Tests |
+| Modul-Level | `pfad_pruefen(pfad)` · `fragmente(groesse)` | Reine Helfer, ohne Netz testbar |
 | `client.calendar` | `list_events(user, start, end)` | Kalendereinträge lesen |
 | `client.calendar` | `create_event(user, subject, start, end)` | Eintrag erstellen |
 | `client.calendar` | `delete_event(user, event_id)` | Eintrag löschen |
