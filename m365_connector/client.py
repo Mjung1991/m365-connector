@@ -9,6 +9,7 @@ import aiohttp
 from .auth import M365Auth
 from .calendar import CalendarService
 from .credentials import load_credentials
+from .files import FilesService
 from .mail import MailService
 from .subscriptions import SubscriptionService
 
@@ -29,6 +30,10 @@ class M365Client:
         self.mail = MailService(auth, self._get_session)
         self.calendar = CalendarService(auth, self._get_session)
         self.subscriptions = SubscriptionService(auth, self._get_session)
+        # Datei-Ablage (ab v0.8.0): SharePoint-/OneDrive-Upload. Braucht ein Schreib-Recht in
+        # Azure (Sites.Selected mit ReadWrite oder Files.ReadWrite.All) — ohne das antwortet
+        # Graph auf /sites und /drive mit 401, siehe README.
+        self.files = FilesService(auth, self._get_session)
 
     def _get_session(self) -> aiohttp.ClientSession:
         """Gibt die gemeinsame HTTP-Session zurück — wird bei Bedarf erstellt.

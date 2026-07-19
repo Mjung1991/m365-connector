@@ -39,6 +39,26 @@ PERMISSIONS: dict[str, Permission] = {
         scope="Files.Read.All",
         description="OneDrive-Dateien lesen",
     ),
+    # --- Schreib-Rechte fuer die Datei-Ablage (ab v0.8.0, siehe files.py) ---
+    # BEVORZUGT: sites_selected. Es gibt der Anwendung Zugriff auf GENAU die Sites, die ein
+    # Administrator einzeln freigibt — nicht auf den ganzen Tenant. Achtung, dreistufig:
+    #   1. Zustimmung fuer `Sites.Selected` in Entra ID,
+    #   2. je Site ein `POST /sites/{siteId}/permissions` mit Rolle `write`,
+    #   3. Token holen.
+    # Fehlt Schritt 2, hat die Anwendung trotz erteilter Zustimmung KEINEN Zugriff — das ist
+    # der haeufigste Stolperstein (Beleg: concepts/permissions-selected-overview.md).
+    "sites_selected": Permission(
+        key="sites_selected",
+        scope="Sites.Selected",
+        description="Nur ausdruecklich freigegebene SharePoint-Sites (Rechte je Site separat vergeben)",
+    ),
+    # NOTNAGEL: gibt Schreibzugriff auf ALLE Dateien im gesamten Tenant. Nur nutzen, wenn
+    # Sites.Selected nicht in Frage kommt — und dann bewusst dokumentieren.
+    "files_readwrite": Permission(
+        key="files_readwrite",
+        scope="Files.ReadWrite.All",
+        description="Dateien im ganzen Tenant lesen und schreiben (weitreichend — Sites.Selected bevorzugen)",
+    ),
     "users_read": Permission(
         key="users_read",
         scope="User.Read.All",
